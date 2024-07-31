@@ -1,8 +1,8 @@
 import argv
 import gleam/io
 
-import build_filter
-import spell_check
+import internal/build_filter
+import internal/spell_check
 
 pub fn main() {
   case argv.load().arguments {

@@ -25,5 +25,5 @@ To achieve a P = 0.01 (1 false positive in 100),
 Set M=3257969 (397.7KiB)
 And K=6
 
-MAX_SIZE of M = 999999999999999
-MAX_SIZE of K = 100
+MAX_SIZE of M = 2^64
+MAX_SIZE of K = 2^8
