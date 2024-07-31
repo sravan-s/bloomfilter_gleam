@@ -8,7 +8,7 @@ import gleam/list
 import internal/header
 import mumu
 
-fn hash(text: String, max_bound: Int, i: Int) -> Int {
+pub fn hash(text: String, max_bound: Int, i: Int) -> Int {
   case mumu.hash_with_seed(text, i) {
     h if h > max_bound -> h % max_bound
     h if h <= max_bound -> h

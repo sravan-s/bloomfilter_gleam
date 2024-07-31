@@ -20,6 +20,12 @@ const bf_size = 64
 // save upto 2^8 = 256
 const hfn_size = 8
 
+const byte_size = 8
+
+pub fn get_header_size() -> Int {
+  { v_size + bf_size + hfn_size } / byte_size
+}
+
 // an unoptimal power fn for Ints; donot reuse
 // only works when exp >= 0
 pub fn pow(base: Int, exp: Int) -> Int {

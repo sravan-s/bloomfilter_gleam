@@ -16,8 +16,9 @@ pub fn main() {
       io.println("SUCESS")
     }
     ["spell-check", path_to_bloom_filter, word] -> {
-      spell_check.spell_check(path_to_bloom_filter, word)
-      io.println("SUCESS")
+      let result = spell_check.spell_check(path_to_bloom_filter, word)
+      io.debug(result)
+      Nil
     }
     _ -> {
       io.println(
