@@ -1,6 +1,8 @@
 import gleam/bit_array
 import gleam/list
 
+pub const version = 1
+
 pub type Header {
   Header(version: Int, bloom_filter_size: Int, hash_fns_count: Int)
 }
@@ -20,7 +22,7 @@ const hfn_size = 8
 
 // an unoptimal power fn for Ints; donot reuse
 // only works when exp >= 0
-fn pow(base: Int, exp: Int) -> Int {
+pub fn pow(base: Int, exp: Int) -> Int {
   case exp {
     0 -> 1
     x if x > 0 -> base * pow(base, exp - 1)

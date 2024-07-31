@@ -1,9 +1,11 @@
 import file_streams/file_stream
 import file_streams/text_encoding
+import gleam/bit_array
 import gleam/dict.{type Dict}
 import gleam/int
 import gleam/io
 import gleam/list
+import internal/header
 import mumu
 
 fn hash(text: String, max_bound: Int, i: Int) -> Int {
@@ -55,6 +57,37 @@ fn dict_to_list(d: Dict(Int, Int), current: Int, list_size: Int) -> List(Int) {
   }
 }
 
+fn bit_list_to_bytes(l: List(Int)) -> Int {
+  let size = list.length(l) - 1
+  case l {
+    [] -> 0
+    [a] -> a
+    [a, ..rest] -> { header.pow(2, size) * a } + bit_list_to_bytes(rest)
+  }
+}
+
+pub fn right_padding(a: List(Int)) -> List(Int) {
+  let size = list.length(a)
+  case size {
+    s if s < 8 -> {
+      let padded = list.reverse([0, ..list.reverse(a)])
+      right_padding(padded)
+    }
+    _ -> a
+  }
+}
+
+pub fn list_to_bitarray(list: List(Int)) -> BitArray {
+  case list {
+    [] -> <<>>
+    [a, b, c, d, e, f, g, h, ..rest] -> {
+      let val = <<bit_list_to_bytes([a, b, c, d, e, f, g, h]):size(8)>>
+      bit_array.append(val, list_to_bitarray(rest))
+    }
+    partial_bits -> <<bit_list_to_bytes(right_padding(partial_bits)):size(8)>>
+  }
+}
+
 pub fn build_bloomfilter(
   path_to_dict_src: String,
   path_to_dict_output: String,
@@ -90,22 +123,22 @@ pub fn build_bloomfilter(
   let buffer_dict = encode(src_handle, filter_size, hash_fns_count, buffer_dict)
   io.println("Reading lines - Finish")
 
-  io.println("Converting to String")
-  let buffer_str =
+  // lol, performance here is super bad
+  io.println("Converting to BitArray")
+  let filter_data =
     dict_to_list(buffer_dict, 0, filter_size)
-    |> list.map(fn(x) {
-      case dict.get(buffer_dict, x) {
-        Ok(x) -> int.to_string(x)
-        _ -> int.to_string(0)
-      }
-    })
-    |> list.fold("", fn(b, a) { b <> a })
-  io.println("Converting to String - Finish")
+    |> list_to_bitarray
+  let header_info =
+    header.encode_header(header.Header(
+      bloom_filter_size: filter_size,
+      hash_fns_count: hash_fns_count,
+      version: header.version,
+    ))
+  let data = bit_array.append(header_info, filter_data)
+  io.println("Converting to BitArray - Finish")
 
   io.println("Writing bloomfilter")
-  let dest_handle = case
-    file_stream.open_write_text(path_to_dict_output, encoding)
-  {
+  let dest_handle = case file_stream.open_write(path_to_dict_output) {
     Ok(handle) -> handle
     Error(e) -> {
       let error_message = "Couldnt load file to write: " <> path_to_dict_output
@@ -113,7 +146,7 @@ pub fn build_bloomfilter(
       panic as error_message
     }
   }
-  let _ = case file_stream.write_chars(dest_handle, buffer_str) {
+  let _ = case file_stream.write_bytes(dest_handle, data) {
     Ok(handle) -> handle
     Error(e) -> {
       let error_message = "Couldnt write to dest. file: " <> path_to_dict_output
