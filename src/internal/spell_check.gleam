@@ -1,5 +1,4 @@
 import file_streams/file_stream
-import gleam/bit_array
 import gleam/int
 import gleam/io
 import gleam/list
@@ -7,7 +6,7 @@ import gleam/string
 import internal/build_filter
 import internal/header
 
-fn read_filter(handle: file_stream.FileStream) -> #(header.Header, BitArray) {
+fn read_filter(handle: file_stream.FileStream) -> #(header.Header, List(Int)) {
   let header = case file_stream.read_bytes(handle, header.get_header_size()) {
     Ok(line) -> header.decode_header(line)
     Error(e) -> {
@@ -25,7 +24,7 @@ fn read_filter(handle: file_stream.FileStream) -> #(header.Header, BitArray) {
     }
   }
   let body = case file_stream.read_bytes(handle, header.bloom_filter_size) {
-    Ok(line) -> line
+    Ok(line) -> bin_to_list(line)
     Error(e) -> {
       let error_message = "Couldnt read body of bllomfilter: "
       io.debug(e)
@@ -50,7 +49,7 @@ fn get_hashes(
 
 // <<1, 7>> = [1, 7]
 @external(erlang, "binary", "bin_to_list")
-fn bin_to_list(bytes: BitArray, start: Int, end: Int) -> List(Int)
+fn bin_to_list(bytes: BitArray) -> List(Int)
 
 @external(erlang, "erlang", "integer_to_list")
 fn integer_to_list(num: Int, base: Int) -> String
@@ -78,6 +77,11 @@ fn left_pad(s: String) -> List(Int) {
   |> pad
 }
 
+pub fn find_n(x: Int, on big_list: List(Int)) -> Int {
+  // directly using this inside map breaks the somehow?
+  nth(x, big_list)
+}
+
 pub fn spell_check(path_to_bloom_filter: String, word: String) {
   let bf_handle = case file_stream.open_read(path_to_bloom_filter) {
     Ok(k) -> k
@@ -90,22 +94,18 @@ pub fn spell_check(path_to_bloom_filter: String, word: String) {
 
   let #(header, bytes) = read_filter(bf_handle)
   let hashes =
-    get_hashes(word, header.bloom_filter_size, header.hash_fns_count, [])
-  // slow, very bad ~ must optimize the datastrcuture
-  let bit_list =
-    bin_to_list(bytes, 0, bit_array.byte_size(bytes))
+    get_hashes(word, header.bloom_filter_size, header.hash_fns_count - 1, [])
+    // [35, 218, 165, 5, 249, 138, 87]
     |> list.map(fn(x) {
-      integer_to_list(x, 2)
-      |> left_pad
+      let position = x % 8
+      let byte = find_n({ x / 8 }, on: bytes)
+      let s =
+        integer_to_list(byte, 2)
+        |> left_pad
+
+      find_n(position, s)
     })
-    |> list.flatten
-  let results =
-    hashes
-    |> list.map(fn(x) { nth(x, bit_list) })
     |> list.fold(0, fn(x, y) { x + y })
 
-  case results {
-    k if k + 1 == header.hash_fns_count -> True
-    _ -> False
-  }
+  hashes == header.hash_fns_count
 }
